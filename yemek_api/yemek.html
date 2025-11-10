@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>💬 Gemini AI Chat</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f4f7f6;
+      color: #333;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    h3 { color: #2c3e50; text-align: center; }
+    #chat-box {
+      background-color: #fff;
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      max-height: 500px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+    .message { margin-bottom: 15px; }
+    .user { text-align: right; }
+    .user span {
+      background-color: #3498db;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 18px;
+      display: inline-block;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+    .bot span {
+      background-color: #ecf0f1;
+      color: #2c3e50;
+      padding: 10px 14px;
+      border-radius: 18px;
+      display: inline-block;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+    #loading { text-align: center; font-style: italic; color: #777; display: none; margin-top: 10px; }
+    textarea {
+      width: 98%;
+      min-height: 80px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin-top: 10px;
+      resize: none;
+    }
+    button {
+      background-color: #3498db;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover { background-color: #2980b9; }
+    #image-preview { margin-top: 10px; text-align: center; }
+    #image-preview img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h3>💬 Gemini AI Chat (Resim Destekli)</h3>
+
+  <div id="chat-box"></div>
+  <div id="loading">Gemini yazıyor<span id="dots">...</span></div>
+
+  <textarea id="prompt-input" placeholder="Örn: 'Bu resimdeki malzemelerle ne yemek yapılır?'"></textarea>
+  <input type="file" id="image-input" accept="image/*" />
+  <div id="image-preview"></div>
+  <button id="submit-button">Gönder</button>
+
+  <script>
+    const API_URL = "http://127.0.0.1:9000/ara"; // FastAPI endpoint
+
+    const submitButton = document.getElementById("submit-button");
+    const promptInput = document.getElementById("prompt-input");
+    const chatBox = document.getElementById("chat-box");
+    const loadingDiv = document.getElementById("loading");
+    const imageInput = document.getElementById("image-input");
+    const imagePreview = document.getElementById("image-preview");
+
+    let dotInterval;
+
+    // Resim önizleme
+    imageInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) {
+        imagePreview.innerHTML = "";
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        imagePreview.innerHTML = `<img src="${reader.result}" alt="Yüklenen resim" />`;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function startDots() {
+      const dots = document.getElementById("dots");
+      let count = 0;
+      dotInterval = setInterval(() => {
+        count = (count + 1) % 4;
+        dots.textContent = ".".repeat(count);
+      }, 400);
+    }
+
+    function stopDots() { clearInterval(dotInterval); }
+
+    function addMessage(text, sender) {
+      const div = document.createElement("div");
+      div.classList.add("message", sender);
+      const span = document.createElement("span");
+      span.textContent = text;
+      div.appendChild(span);
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    submitButton.addEventListener("click", async () => {
+      const promptText = promptInput.value.trim();
+      if (!promptText && !imageInput.files[0]) {
+        addMessage("Lütfen bir metin yazın veya resim yükleyin.", "bot");
+        return;
+      }
+
+      addMessage(promptText, "user");
+      promptInput.value = "";
+      loadingDiv.style.display = "block";
+      startDots();
+      submitButton.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append("prompt", promptText);
+        if (imageInput.files[0]) {
+          formData.append("image", imageInput.files[0]);
+        }
+
+        const response = await fetch(API_URL, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) throw new Error(`Sunucu hatası: ${response.status}`);
+        const rawResponse = await response.json();
+        const botText = rawResponse.result;
+
+        stopDots();
+        loadingDiv.style.display = "none";
+        addMessage(botText, "bot");
+
+      } catch (error) {
+        stopDots();
+        loadingDiv.style.display = "none";
+        addMessage(`Bir hata oluştu: ${error.message}`, "bot");
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
